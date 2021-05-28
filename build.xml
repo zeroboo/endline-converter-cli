@@ -8,8 +8,12 @@
 <!-- You can turn off the Compile on Save (or Deploy on Save) setting -->
 <!-- in the project's Project Properties dialog box.-->
 <project name="EndlineConverter" default="default" basedir=".">
+    <property name="app.version" value="1.0.0"/>
+    <property name="app.vendor" value="tanhung.vn@gmail.com"/>
+    <property name="app.title" value="endline-converter-cli"/>
     <description>Builds, tests, and runs the project EndlineConverter.</description>
     <import file="nbproject/build-impl.xml"/>
+    
     <!--
 
     There exist several targets which are by default empty and which can be 
@@ -71,8 +75,38 @@
 
     -->
     <target name="distribute" depends="compile">
-      <jar destfile="${dist.jar|" >
-        <fileset dir="${src.dir}/*.xml"/>
-      </jar>
+        <jar destfile="${dist.jar|" >
+            <fileset dir="${src.dir}/*.xml"/>
+        </jar>
     </target>
+
+    <target name="-unjar-and-copy-lib-jars">
+        <unjar dest="${build.classes.dir}">
+            <fileset dir="lib">
+                <include name="**/*.jar"/>
+            </fileset>
+            <patternset>
+                <exclude name="META-INF/**"/>
+                <exclude name="/*"/>
+            </patternset>
+        </unjar>
+    </target>
+
+    <target depends="init,compile,-pre-pre-jar,-pre-jar,-unjar-and-copy-lib-jars" name="fat-jar">
+        <property location="${build.classes.dir}" name="build.classes.dir.resolved"/>
+        <jar destfile="${dist.jar}">
+            <fileset dir="${build.classes.dir}"/>
+            <manifest>
+                <attribute name="Main-Class" value="${main.class}"/>
+                <attribute name="Implementation-Title" value="${app.title}"/>
+                <attribute name="Implementation-Version" value="${app.version}"/>
+                <attribute name="Implementation-Vendor" value="${app.vendor}"/>
+            </manifest>
+        </jar>
+        <echo>To run this application from the command line without Ant, try:</echo>
+        <property location="${dist.jar}" name="dist.jar.resolved"/>
+        <echo>java -jar "${dist.jar.resolved}"</echo>
+    </target>
+
+    <target depends="clean,fat-jar" name="clean-and-fat-jar"/>
 </project>

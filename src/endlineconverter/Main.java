@@ -61,12 +61,14 @@ public class Main {
 
             String formatOption = cmdOptions.getOptionValue("f");
             String encodingOption = cmdOptions.getOptionValue("e");
+            String inputFolder = cmdOptions.getOptionValue("in");
+            String outputFolder = cmdOptions.getOptionValue("out");
             Charset charset;
             try {
                 charset = Charset.forName(encodingOption);
             } catch (IllegalCharsetNameException ex) {
-                charset = DEFAULT_CHARSET;
-                staticLogger.info("Invalid encoding {}, default encoding is used: {}", encodingOption, charset.toString());
+                charset = null;
+                staticLogger.info("Invalid encoding {}, default encoding is used: {}", encodingOption, charset);
             }
 
             staticLogger.info("Arguments: format={}, encoding={}, argument={}", formatOption, encodingOption, cmdOptions.getArgList());
@@ -76,9 +78,11 @@ public class Main {
                     showHelp();
                 } else {
                     ///Do converting
-                    for (String target : cmdOptions.getArgList()) {
-                        convert(target, format, charset.toString());
+                    Path outputPath = Paths.get(outputFolder);
+                    if(!Files.exists(outputPath)){
+                        Files.createDirectories(outputPath);
                     }
+                    convert(inputFolder, outputFolder, format, charset!=null?charset.toString():null);
                 }
             } else {
                 throw new InvalidParameterException("Invalid format `" + formatOption + "`");
@@ -116,26 +120,32 @@ public class Main {
 
         return result;
     }
-    public static int convertFile(String targetFile, LineEndings format) {
-        return convertFile(targetFile, format, DEFAULT_CHARSET.toString());
+    public static int convertFile(String targetFile, String outputFolder, LineEndings format) {
+        return convertFile(targetFile, outputFolder, format, DEFAULT_CHARSET.toString());
     }
-    public static int convertFile(String targetFile, LineEndings format, String encoding) {
-        File f = new File(targetFile);
+    public static int convertFile(String targetFile, String outputFolder, LineEndings format, String encoding) {
+        File inputFile = new File(targetFile);
         int convertedFiles = 0;
-        if (f.isDirectory()) {
-            staticLogger.info("Folder: {}, sub={}", targetFile, f.list());
-            for (String subFile : f.list()) {
+        if (inputFile.isDirectory()) {
+            staticLogger.info("Folder: {}, sub={}", targetFile, inputFile.list());
+            for (String subFile : inputFile.list()) {
                 String filePath = targetFile + FILE_PATH_SEPARATOR + subFile;
-                convertedFiles += convertFile(filePath, format, encoding);
+                convertedFiles += convertFile(filePath, outputFolder, format, encoding);
             }
 
         } else {
             try {
-                LineEndingsUtils.convertLineEndings(f, f, format, Boolean.TRUE, encoding);
+                Path outputPath = Paths.get(outputFolder).resolve(targetFile);
+                if(!Files.exists(outputPath.getParent())){
+                    Files.createDirectories(outputPath.getParent());
+                }
+                File outputFile = new File(outputPath.toString()) ;
+                LineEndingsUtils.convertLineEndings(inputFile, outputFile, format, Boolean.TRUE, encoding);
                 staticLogger.info("Converted file: {}", targetFile);
                 convertedFiles = 1;
+                
             } catch (IOException ex) {
-                staticLogger.error("Fail to convert file {}, format {}, encoding {}", targetFile, format.toString(), encoding);
+                staticLogger.error("Fail to convert file {}, format {}, encoding {}", targetFile, format.toString(), encoding, ex);
                 convertedFiles = 0;
             }
 
@@ -143,33 +153,35 @@ public class Main {
         return convertedFiles;
     }
 
-    public static void convert(String target, LineEndings format, String encoding) throws IOException {
-        Path targetPath = Paths.get(target);
+    public static void convert(String input, String outputFolder, LineEndings format, String encoding) throws IOException {
+        Path targetPath = Paths.get(input);
         boolean isFolder = Files.isDirectory(targetPath);
 
-        staticLogger.info("Start converting {}, folder={}", target, isFolder);
+        staticLogger.info("Start converting {}, input={}, output={}", input, isFolder);
         try {
             List<Path> allFiles = new ArrayList<>();
             Files.walk(targetPath)
                     .filter(Files::isRegularFile)
                     .forEach(allFiles::add);
             staticLogger.info("Total files: total={}", allFiles.size());
-            convertFile(target, format, encoding);
+            convertFile(input, outputFolder, format, encoding);
         } catch (Exception ex) {
             staticLogger.error("Error ", ex);
         }
 
-        staticLogger.info("Finish converting {}", target);
+        staticLogger.info("Finish converting {}", input);
     }
 
     public static Options createProgramOptions() {
         // create Options object
         Options newOptions = new Options();
         newOptions.addOption("f", "format", true, "Format to convert to: " + Arrays.stream(LineEndings.values()).map(c -> c.name()).collect(Collectors.joining(", ")));
-        newOptions.addOption("l", "location", true, "Folder or file to convert");
+        
+        newOptions.addOption("in", "input", true, "Input folder or file to convert");
+        newOptions.addOption("out", "output", true, "Output folder or file to convert");
 
-        newOptions.addOption("i", "include", true, "File include pattern");
-        newOptions.addOption("x", "exclude", true, "File exclude pattern");
+        newOptions.addOption("fi", "include", true, "File include pattern");
+        newOptions.addOption("fe", "exclude", true, "File exclude pattern");
         newOptions.addOption("e", "encoding", true, "Encoding for output files, default is utf-8");
 
         return newOptions;

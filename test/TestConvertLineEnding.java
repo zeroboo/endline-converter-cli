@@ -93,7 +93,7 @@ public class TestConvertLineEnding {
     public void testConvert_WindowsFile(){
         String target = TEST_ROOT_FOLDER + "/windows.txt";
         LineEndings format = LineEndings.windows;
-        Main.convertFile(target, format);
+        Main.convertFile(target, "out", format);
     
     }
 }
