@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,6 +47,15 @@ public class Main {
     static Options options;
     static String FILE_PATH_SEPARATOR = System.getProperty("file.separator");
     static Charset DEFAULT_CHARSET = Charset.forName("utf-8");
+    static Charset[] SUPPORTED_CHARSET = new Charset[]{
+        StandardCharsets.ISO_8859_1
+        , StandardCharsets.US_ASCII
+        , StandardCharsets.UTF_16
+        , StandardCharsets.UTF_16BE
+        , StandardCharsets.UTF_16LE
+        , StandardCharsets.UTF_8
+    };
+    
     public static void main(String[] agrs) {
         staticLogger.info("LineEndingConverter cli: started, arguments={}", Arrays.toString(agrs));
         staticLogger.info("Current working directory: {}", System.getProperty("user.dir"));
@@ -67,7 +77,7 @@ public class Main {
             try {
                 charset = Charset.forName(encodingOption);
             } catch (IllegalCharsetNameException ex) {
-                charset = null;
+                charset = DEFAULT_CHARSET;
                 staticLogger.info("Invalid encoding {}, default encoding is used: {}", encodingOption, charset);
             }
 
@@ -82,7 +92,7 @@ public class Main {
                     if(!Files.exists(outputPath)){
                         Files.createDirectories(outputPath);
                     }
-                    convert(inputFolder, outputFolder, format, charset!=null?charset.toString():null);
+                    convert(inputFolder, outputFolder, format, charset!=null?charset:DEFAULT_CHARSET);
                 }
             } else {
                 throw new InvalidParameterException("Invalid format `" + formatOption + "`");
@@ -121,13 +131,13 @@ public class Main {
         return result;
     }
     public static int convertFile(String targetFile, String outputFolder, LineEndings format) {
-        return convertFile(targetFile, outputFolder, format, DEFAULT_CHARSET.toString());
+        return convertFile(targetFile, outputFolder, format, DEFAULT_CHARSET);
     }
-    public static int convertFile(String targetFile, String outputFolder, LineEndings format, String encoding) {
+    public static int convertFile(String targetFile, String outputFolder, LineEndings format, Charset encoding) {
         File inputFile = new File(targetFile);
         int convertedFiles = 0;
         if (inputFile.isDirectory()) {
-            staticLogger.info("Folder: {}, sub={}", targetFile, inputFile.list());
+            staticLogger.info("Folder: {}, sub={}, encoding={}", targetFile, inputFile.list(), encoding.name());
             for (String subFile : inputFile.list()) {
                 String filePath = targetFile + FILE_PATH_SEPARATOR + subFile;
                 convertedFiles += convertFile(filePath, outputFolder, format, encoding);
@@ -140,8 +150,8 @@ public class Main {
                     Files.createDirectories(outputPath.getParent());
                 }
                 File outputFile = new File(outputPath.toString()) ;
-                LineEndingsUtils.convertLineEndings(inputFile, outputFile, format, Boolean.TRUE, encoding);
-                staticLogger.info("Converted file: {}", targetFile);
+                LineEndingsUtils.convertLineEndings(inputFile, outputFile, format, Boolean.TRUE, encoding.name());
+                staticLogger.info("Converted file: {}, encoding={}", targetFile, encoding.name());
                 convertedFiles = 1;
                 
             } catch (IOException ex) {
@@ -153,11 +163,11 @@ public class Main {
         return convertedFiles;
     }
 
-    public static void convert(String input, String outputFolder, LineEndings format, String encoding) throws IOException {
+    public static void convert(String input, String outputFolder, LineEndings format, Charset encoding) throws IOException {
         Path targetPath = Paths.get(input);
         boolean isFolder = Files.isDirectory(targetPath);
 
-        staticLogger.info("Start converting {}, input={}, output={}", input, isFolder);
+        staticLogger.info("Start converting {}, input={}, output={}, encoding={}", input, isFolder, encoding);
         try {
             List<Path> allFiles = new ArrayList<>();
             Files.walk(targetPath)
@@ -175,14 +185,15 @@ public class Main {
     public static Options createProgramOptions() {
         // create Options object
         Options newOptions = new Options();
-        newOptions.addOption("f", "format", true, "Format to convert to: " + Arrays.stream(LineEndings.values()).map(c -> c.name()).collect(Collectors.joining(", ")));
+        newOptions.addOption("f", "format", true, "Line ending format to convert to: " + Arrays.stream(LineEndings.values()).map(c -> c.name().toUpperCase()).collect(Collectors.joining(", ")));
         
         newOptions.addOption("in", "input", true, "Input folder or file to convert");
         newOptions.addOption("out", "output", true, "Output folder or file to convert");
 
         newOptions.addOption("fi", "include", true, "File include pattern");
         newOptions.addOption("fe", "exclude", true, "File exclude pattern");
-        newOptions.addOption("e", "encoding", true, "Encoding for output files, default is utf-8");
+        newOptions.addOption("e", "encoding", true, "Encode charset in converting: " + Arrays.stream(SUPPORTED_CHARSET).map(e-> e.toString()).collect(Collectors.joining(", "))
+            + ". Default is UTF-8");
 
         return newOptions;
     }
